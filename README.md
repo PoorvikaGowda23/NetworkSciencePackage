@@ -1,2 +1,1 @@
-# NetworkSciencePackage
-Modeling memory in time-respecting paths ontemporal networks
+# Modeling Memory in Time-Respecting Paths on Temporal Networks
