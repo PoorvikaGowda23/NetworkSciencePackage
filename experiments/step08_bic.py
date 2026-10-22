@@ -68,10 +68,10 @@ DATASETS = [
 
 def run_step08_pipeline() -> None:
     """Run the multi-dataset BIC comparison pipeline for MEM vs MEM+SBM."""
-    print("=" * 70)
-    print("Step 8 Experiment: Model Selection (BIC) for MEM vs. MEM+SBM")
-    print(f"Memory horizons: {MEMORY_HORIZONS} | Paths per day: {BIC_NUM_PATHS:,}")
-    print("=" * 70)
+    print("=" * 70, flush=True)
+    print("Step 8 Experiment: Model Selection (BIC) for MEM vs. MEM+SBM", flush=True)
+    print(f"Memory horizons: {MEMORY_HORIZONS} | Base paths per day: {BIC_NUM_PATHS:,}", flush=True)
+    print("=" * 70, flush=True)
 
     rng = np.random.default_rng(RANDOM_SEED)
 
@@ -81,7 +81,7 @@ def run_step08_pipeline() -> None:
     start_total = time.time()
 
     for d_idx, (display_name, dataset_key) in enumerate(DATASETS, 1):
-        print(f"\n[{d_idx}/6] Processing '{display_name}' ({dataset_key})...")
+        print(f"\n[{d_idx}/6] Processing '{display_name}' ({dataset_key})...", flush=True)
         t0 = time.time()
 
         # 1. Load contacts and community labels
@@ -91,15 +91,17 @@ def run_step08_pipeline() -> None:
 
         n = int(max(contacts["i"].max(), contacts["j"].max())) + 1
         k = int(labels.max()) + 1
-        print(f"      Nodes n={n}, Communities K={k}, Total contacts={len(contacts):,}")
+        print(f"      Nodes n={n}, Communities K={k}, Total contacts={len(contacts):,}", flush=True)
 
         # 2. Partition into observation days
         days = split_by_day(contacts, dataset_key)
-        print(f"      Observation days: {len(days)}")
+        print(f"      Observation days: {len(days)}", flush=True)
 
         # 3. Build daily temporal graphs and sample TRPs
         all_paths = []
         all_snapshots = []
+
+        num_paths_day = BIC_NUM_PATHS if len(days) > 1 else max(1000, BIC_NUM_PATHS * 2)
 
         for day_idx, day_df in enumerate(days):
             g_day = build_temporal_graph(
@@ -113,13 +115,13 @@ def run_step08_pipeline() -> None:
 
             day_paths = generate_many_trps(
                 g_day,
-                num_paths=BIC_NUM_PATHS,
+                num_paths=num_paths_day,
                 length=PATH_LENGTH,
                 rng=rng,
             )
             all_paths.extend(day_paths)
 
-        print(f"      Sampled {len(all_paths):,} total paths across {len(days)} days.")
+        print(f"      Sampled {len(all_paths):,} total paths across {len(days)} days.", flush=True)
 
         # 4. Compute empirical initial interaction matrix across all snapshots
         pooled_graph = TemporalGraph(
@@ -136,8 +138,8 @@ def run_step08_pipeline() -> None:
         bic_mem_list: list[float] = []
         bic_sbm_list: list[float] = []
 
-        print(f"      {'m':<5} | {'p (MEM)':<8} | {'BIC (MEM)':<14} | {'p (SBM)':<8} | {'BIC (SBM)':<14} | {'delta BIC':<10}")
-        print("      " + "-" * 72)
+        print(f"      {'m':<5} | {'p (MEM)':<8} | {'BIC (MEM)':<14} | {'p (SBM)':<8} | {'BIC (SBM)':<14} | {'delta BIC':<10}", flush=True)
+        print("      " + "-" * 72, flush=True)
 
         for m in MEMORY_HORIZONS:
             records = build_records(all_paths, m=m)
@@ -154,7 +156,8 @@ def run_step08_pipeline() -> None:
 
             print(
                 f"      {m:<5} | {res_mem.p:<8.4f} | {res_mem.bic:<14.2f} | "
-                f"{res_sbm.p:<8.4f} | {res_sbm.bic:<14.2f} | {delta_bic:<10.2f}"
+                f"{res_sbm.p:<8.4f} | {res_sbm.bic:<14.2f} | {delta_bic:<10.2f}",
+                flush=True,
             )
 
             records_table.append({
@@ -182,14 +185,14 @@ def run_step08_pipeline() -> None:
             "n": n,
         }
 
-        print(f"      Completed in {time.time() - t0:.1f}s.")
+        print(f"      Completed {display_name} in {time.time() - t0:.1f}s.", flush=True)
 
     # 6. Save CSV of numbers
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     csv_path = RESULTS_DIR / "step08_bic_results.csv"
     df_results = pd.DataFrame(records_table)
     df_results.to_csv(csv_path, index=False)
-    print(f"\n[+] Saved numerical results to: {csv_path}")
+    print(f"\n[+] Saved numerical results to: {csv_path}", flush=True)
 
     # 7. Generate Figure 2 comparison plot
     plot_path = RESULTS_DIR / "step08_bic_comparison.png"
@@ -198,12 +201,12 @@ def run_step08_pipeline() -> None:
         m_values=MEMORY_HORIZONS,
         output_path=plot_path,
     )
-    print(f"[+] Saved comparison figure to: {plot_path}")
+    print(f"[+] Saved comparison figure to: {plot_path}", flush=True)
 
     total_time = time.time() - start_total
-    print("\n" + "=" * 70)
-    print(f"Step 8 Pipeline Complete in {total_time:.1f}s ({total_time / 60:.2f} min).")
-    print("=" * 70)
+    print("\n" + "=" * 70, flush=True)
+    print(f"Step 8 Pipeline Complete in {total_time:.1f}s ({total_time / 60:.2f} min).", flush=True)
+    print("=" * 70, flush=True)
 
 
 if __name__ == "__main__":

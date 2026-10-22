@@ -810,7 +810,7 @@ def fit_mem_sbm(
                 neg_ll_C,
                 log_C0,
                 method="L-BFGS-B",
-                options={"maxiter": 20, "ftol": 1e-7, "gtol": 1e-5},
+                options={"maxiter": 8, "ftol": 1e-5, "gtol": 1e-4},
             )
             C = _normalise_C(_build_C_from_log_vec(res.x, triu_idx, k))
         else:
