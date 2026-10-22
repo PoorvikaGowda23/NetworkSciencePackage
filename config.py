@@ -9,8 +9,8 @@ from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Data resolution
-# ---------------------------------------------------------------------------
 T_RES_SECONDS: int = 20          # Temporal resolution of contact data (seconds)
+DAY_SPLIT_GAP_SECONDS: int = 14400  # Minimum gap (seconds, 4h) defining day boundaries for daily splitting
 
 # ---------------------------------------------------------------------------
 # Memory measurement
@@ -23,12 +23,16 @@ P_INIT: float = 0.5              # Initial guess for fixed-point iteration on p
 # ---------------------------------------------------------------------------
 FIXED_POINT_TOL: float = 1e-8   # Convergence tolerance for fixed-point iteration
 FIXED_POINT_MAXITER: int = 1000  # Maximum iterations allowed before declaring non-convergence
+FIXED_POINT_DAMPING: float = 0.15  # Step damping factor (Mann relaxation) for fixed-point stability
+SBM_MAXITER: int = 30            # Max alternating iterations for the MEM+SBM fit (L-BFGS-B per step)
 
 # ---------------------------------------------------------------------------
 # Path sampling
 # ---------------------------------------------------------------------------
 NUM_PATHS: int = 20_000          # Number of random TRPs to sample per measurement
+BIC_NUM_PATHS: int = 2000        # Number of TRPs sampled per day for multi-dataset BIC comparison (Step 8)
 PATH_LENGTH: int = 30            # Number of hops in each sampled time-respecting path
+MAX_TRP_RETRIES_PER_PATH: int = 1000  # Max retry attempts allowed to generate each valid path
 
 # ---------------------------------------------------------------------------
 # Null models
