@@ -39,7 +39,16 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import minimize, minimize_scalar
 
-from config import FIXED_POINT_DAMPING, FIXED_POINT_MAXITER, FIXED_POINT_TOL, P_INIT, SBM_MAXITER
+from config import (
+    FIXED_POINT_DAMPING,
+    FIXED_POINT_MAXITER,
+    FIXED_POINT_TOL,
+    MIN_GROUP_RECORDS,
+    N_BOOTSTRAP,
+    P_INIT,
+    RANDOM_SEED,
+    SBM_MAXITER,
+)
 from memory_trp.records import Records
 
 
@@ -951,3 +960,125 @@ def simulate_mem_sbm_records(
         mem_sets=mem_sets_arr,
         time_idx=time_idx_arr,
     )
+
+
+# ---------------------------------------------------------------------------
+# Step 16 — per-community memory
+# ---------------------------------------------------------------------------
+
+
+def fit_p_per_group(
+    records: Records,
+    labels: np.ndarray,
+    C: np.ndarray,
+    n: int,
+    min_records: int = MIN_GROUP_RECORDS,
+    B: int = N_BOOTSTRAP,
+    rng: np.random.Generator | None = None,
+) -> "pd.DataFrame":
+    """Split records by the community of the current node and fit p per group.
+
+    For each unique community k in the set {labels[v] : v = records.cur},
+    this function:
+      1. Selects the subset of records where labels[records.cur] == k.
+      2. Fits the scalar memory parameter p with the MEM+SBM log-likelihood,
+         holding the affinity matrix C fixed (from a prior global fit).
+      3. Computes a 95% non-parametric bootstrap confidence interval by
+         resampling those records B times with replacement and refitting p.
+
+    Groups with fewer than `min_records` records are silently skipped.
+
+    # NOTE — what per-group p_c can and cannot tell us
+    # -------------------------------------------------
+    # CAN TELL:   Whether walkers currently in community k revisit recently
+    #             seen nodes more (or less) often than the global average.
+    #             A high p_k means the walkers in that community have strong
+    #             return tendencies, e.g. students who circulate within their
+    #             class, or nurses who repeatedly visit the same patients.
+    # CANNOT TELL (especially for small groups):
+    #   - Whether the deviation from global p is statistically significant;
+    #     bootstrap CIs will be very wide when n_records is close to
+    #     min_records, making the estimate essentially noise.
+    #   - Whether a difference reflects *behavioural* memory or merely a
+    #     structural artefact (e.g. an isolated group with fewer contacts).
+    #   Treat estimates from small groups as exploratory only.
+
+    Parameters
+    ----------
+    records : Records
+        Transition records extracted from TRPs on the full graph.
+    labels : np.ndarray
+        Integer community label per node, length n (0-indexed).
+    C : np.ndarray
+        K x K affinity matrix from a global MEM+SBM fit, held fixed.
+    n : int
+        Total number of nodes in the network.
+    min_records : int, default=MIN_GROUP_RECORDS
+        Minimum records required to report p_c for a group.  Groups below
+        this threshold are skipped; see the NOTE above.
+    B : int, default=N_BOOTSTRAP
+        Number of bootstrap resamples for the 95% confidence interval.
+    rng : np.random.Generator or None
+        Numpy random generator.  If None, a fresh generator seeded with
+        RANDOM_SEED is created so results are always reproducible.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per retained group, columns:
+          group      : int   — integer community index
+          n_records  : int   — records used to fit this group
+          p_hat      : float — fitted memory parameter p_c
+          ci_low     : float — 2.5th percentile of bootstrap distribution
+          ci_high    : float — 97.5th percentile of bootstrap distribution
+    """
+    # Lazy imports — both timevarying.py and bootstrap.py import from models.py
+    # at module load time.  Moving the imports inside the function body defers
+    # them to call time, when all modules are fully initialised, and avoids a
+    # circular-import error while still reusing the existing implementations.
+    import pandas as pd
+    from memory_trp.timevarying import fit_p_fixed_C
+    from memory_trp.bootstrap import bootstrap_p
+
+    if rng is None:
+        rng = np.random.default_rng(RANDOM_SEED)
+
+    # Community index of the current node in every record, shape (R,)
+    community_of_cur = labels[records.cur]
+    unique_groups = np.unique(community_of_cur)
+
+    rows: list[dict] = []
+
+    for grp in unique_groups:
+        mask = community_of_cur == grp
+        n_grp = int(np.sum(mask))
+
+        # Skip groups too small to yield reliable estimates; see NOTE above.
+        if n_grp < min_records:
+            continue
+
+        grp_rec = records[mask]   # Records.__getitem__ supports boolean masks
+
+        # Scalar p maximising MEM+SBM log-likelihood with C fixed
+        p_hat = fit_p_fixed_C(grp_rec, C=C, labels=labels)
+
+        # 95% CI: resample this group's records B times, refit p each time
+        boot = bootstrap_p(
+            grp_rec,
+            n=n,
+            model="MEM+SBM",
+            B=B,
+            rng=rng,
+            labels=labels,
+            C_global=C,
+        )
+
+        rows.append({
+            "group":     int(grp),
+            "n_records": n_grp,
+            "p_hat":     float(p_hat),
+            "ci_low":    float(boot.p2_5),
+            "ci_high":   float(boot.p97_5),
+        })
+
+    return pd.DataFrame(rows, columns=["group", "n_records", "p_hat", "ci_low", "ci_high"])

@@ -81,6 +81,9 @@ N_BOOTSTRAP: int = 200           # Number of bootstrap resamples for confidence 
 # SIR epidemic model
 # ---------------------------------------------------------------------------
 N_SIR_RUNS: int = 200           # Number of independent SIR simulation runs
+SIR_RECOVERY_SNAPSHOTS: int = 30   # Recovery duration in snapshots (30 snapshots * 20s = 10 min)
+SIR_TARGET_OUTBREAK: float = 0.40  # Target outbreak fraction for rate calibration (30% to 50%)
+SIR_CALIBRATION_RUNS: int = 25     # Simulation runs per rate-calibration step
 
 # ---------------------------------------------------------------------------
 # Filesystem paths  (resolved relative to this file so the package is portable)
@@ -89,3 +92,10 @@ _BASE_DIR: Path = Path(__file__).parent
 DATA_DIR: Path = _BASE_DIR / "data"       # Raw and processed contact-sequence datasets
 RESULTS_DIR: Path = _BASE_DIR / "results" # Output figures, tables, and serialised results
 CACHE_DIR_STEP09: Path = RESULTS_DIR / "cache_step09"  # Cache for Step 9 null model paths and fits
+
+# ---------------------------------------------------------------------------
+# Step 16 — per-community memory
+# ---------------------------------------------------------------------------
+MIN_GROUP_RECORDS: int = 200   # Skip a community group that has fewer records than this
+STEP16_M: int = 10             # Memory horizon m used in the per-group analysis
+STEP16_NUM_PATHS: int = 1500   # TRPs sampled per observation day in Step 16

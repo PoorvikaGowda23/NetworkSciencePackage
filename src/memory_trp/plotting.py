@@ -887,6 +887,421 @@ def plot_null_comparison_barchart(
     plt.close(fig)
 
 
+def plot_p_per_group(
+    df: "pd.DataFrame",
+    dataset_name: str,
+    group_names: "dict[int, str] | None",
+    output_path: Path,
+    global_p: "float | None" = None,
+) -> None:
+    """Bar chart of per-community memory parameter p_c with 95% bootstrap CIs.
+
+    Each bar shows the fitted p_c for one community group (e.g. a school class,
+    a hospital role, or a workplace department).  Error bars span the 95%
+    non-parametric bootstrap confidence interval.  Each bar is annotated with
+    the number of transition records used so the reader can judge reliability.
+    An optional horizontal dashed line marks the population-level global p.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Output of fit_p_per_group: columns group, n_records, p_hat, ci_low,
+        ci_high.
+    dataset_name : str
+        Human-readable dataset name for the plot title.
+    group_names : dict[int, str] or None
+        Mapping from integer community index to a display label (e.g. class
+        name or role).  If None, bars are labelled as 'Group k'.
+    output_path : Path
+        Filesystem path where the figure is saved.
+    global_p : float or None, default=None
+        If provided, a horizontal dashed line is drawn at this value to show
+        the population-level memory estimate for comparison.
+    """
+    if len(df) == 0:
+        return
+
+    # Figure width scales with the number of groups so labels stay readable
+    fig, ax = plt.subplots(figsize=(max(6.0, 1.3 * len(df)), 5.2), dpi=300)
+
+    x = np.arange(len(df))
+    p_vals = df["p_hat"].values
+    err_low  = p_vals - df["ci_low"].values
+    err_high = df["ci_high"].values - p_vals
+    yerr = [err_low, err_high]
+
+    bars = ax.bar(
+        x,
+        p_vals,
+        yerr=yerr,
+        capsize=5,
+        color="#4c8be0",
+        edgecolor="#1a4a8a",
+        linewidth=0.9,
+        error_kw={"elinewidth": 1.6, "ecolor": "#333333"},
+    )
+
+    # Annotate each bar top with the number of records it was fitted on.
+    # Placement: just above the upper error bar so it never overlaps the bar.
+    for rect, n_rec, eh in zip(bars, df["n_records"].values, err_high):
+        ax.text(
+            rect.get_x() + rect.get_width() / 2.0,
+            rect.get_height() + eh + 0.016,
+            f"n={n_rec:,}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            color="#444444",
+        )
+
+    # Optional global-p reference line
+    if global_p is not None:
+        ax.axhline(
+            global_p,
+            linestyle="--",
+            color="#d62728",
+            linewidth=1.8,
+            label=f"Global $\\hat{{p}}$ = {global_p:.3f}",
+        )
+        ax.legend(frameon=True, fontsize=10)
+
+    # X-axis tick labels from the supplied name mapping or fallback integers
+    if group_names is not None:
+        tick_labels = [group_names.get(int(g), f"Group {g}") for g in df["group"].values]
+    else:
+        tick_labels = [f"Group {g}" for g in df["group"].values]
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(tick_labels, rotation=30, ha="right", fontsize=10)
+    ax.set_ylabel("Per-community memory $\\hat{p}_c$", fontsize=12)
+    ax.set_title(
+        f"Per-Community Memory Parameter $\\hat{{p}}_c$: {dataset_name}",
+        fontsize=13,
+        fontweight="bold",
+    )
+
+    # y-axis headroom: above the tallest bar + its upper CI + record-count text
+    y_top = float(np.max(p_vals + err_high)) + 0.10
+    ax.set_ylim(0.0, min(1.05, max(y_top, 0.15)))
+    ax.grid(True, axis="y", linestyle=":", alpha=0.6)
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
 
 
+# ---------------------------------------------------------------------------
+# Step 17 — SIR epidemic spreading plots
+# ---------------------------------------------------------------------------
+
+
+def plot_sir_outbreak_comparison(
+    df: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    """Grouped bar chart comparing final outbreak size: Real vs Time-Shuffled.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns:
+          - dataset: display name of dataset
+          - mean_outbreak_real, std_outbreak_real
+          - mean_outbreak_shuff, std_outbreak_shuff
+    output_path : Path
+        Filesystem path where the figure is saved.
+    """
+    datasets = df["dataset"].values
+    n_ds = len(datasets)
+    x = np.arange(n_ds)
+    bar_width = 0.35
+
+    fig, ax = plt.subplots(figsize=(max(8.0, 1.2 * n_ds), 5.2), dpi=300)
+
+    # 1. Real Graph
+    ax.bar(
+        x - bar_width / 2.0,
+        df["mean_outbreak_real"].values,
+        width=bar_width,
+        yerr=df["std_outbreak_real"].values,
+        capsize=4,
+        color="#1f77b4",
+        edgecolor="#0f4c81",
+        linewidth=0.9,
+        label="Empirical Network",
+    )
+
+    # 2. Time-Shuffled Null
+    ax.bar(
+        x + bar_width / 2.0,
+        df["mean_outbreak_shuff"].values,
+        width=bar_width,
+        yerr=df["std_outbreak_shuff"].values,
+        capsize=4,
+        color="#2ca02c",
+        edgecolor="#1b661b",
+        linewidth=0.9,
+        label="Time-Shuffled Null (destroys temporal order & memory)",
+    )
+
+    ax.set_ylabel("Mean Final Outbreak Size (Fraction)", fontsize=12)
+    ax.set_title(
+        "SIR Epidemic: Mean Outbreak Size (Real vs. Time-Shuffled)",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, fontsize=10, rotation=20, ha="right")
+    ax.set_ylim(0.0, 1.05)
+    ax.grid(True, axis="y", linestyle=":", alpha=0.6)
+    ax.legend(frameon=True, fontsize=10, loc="upper right")
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_sir_time_to_peak(
+    df: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    """Grouped bar chart comparing time to infection peak: Real vs Time-Shuffled.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns:
+          - dataset: display name of dataset
+          - mean_time_to_peak_real, std_time_to_peak_real
+          - mean_time_to_peak_shuff, std_time_to_peak_shuff
+    output_path : Path
+        Filesystem path where the figure is saved.
+    """
+    datasets = df["dataset"].values
+    n_ds = len(datasets)
+    x = np.arange(n_ds)
+    bar_width = 0.35
+
+    fig, ax = plt.subplots(figsize=(max(8.0, 1.2 * n_ds), 5.2), dpi=300)
+
+    # 1. Real Graph
+    ax.bar(
+        x - bar_width / 2.0,
+        df["mean_time_to_peak_real"].values,
+        width=bar_width,
+        yerr=df["std_time_to_peak_real"].values,
+        capsize=4,
+        color="#1f77b4",
+        edgecolor="#0f4c81",
+        linewidth=0.9,
+        label="Empirical Network",
+    )
+
+    # 2. Time-Shuffled Null
+    ax.bar(
+        x + bar_width / 2.0,
+        df["mean_time_to_peak_shuff"].values,
+        width=bar_width,
+        yerr=df["std_time_to_peak_shuff"].values,
+        capsize=4,
+        color="#2ca02c",
+        edgecolor="#1b661b",
+        linewidth=0.9,
+        label="Time-Shuffled Null (destroys temporal order & memory)",
+    )
+
+    ax.set_ylabel("Mean Time to Peak (Snapshots)", fontsize=12)
+    ax.set_title(
+        "SIR Epidemic: Mean Time to Infection Peak (Real vs. Time-Shuffled)",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, fontsize=10, rotation=20, ha="right")
+    ax.grid(True, axis="y", linestyle=":", alpha=0.6)
+    ax.legend(frameon=True, fontsize=10, loc="upper right")
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_sir_outbreak_vs_memory(
+    df: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    """Scatter plot of final outbreak size vs inferred memory parameter p.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns:
+          - dataset: display name of dataset
+          - p_memory: inferred empirical memory parameter p
+          - mean_outbreak_real: mean final outbreak fraction on real graph
+    output_path : Path
+        Filesystem path where the figure is saved.
+    """
+    fig, ax = plt.subplots(figsize=(7.5, 5.5), dpi=300)
+
+    p_vals = df["p_memory"].values
+    outbreaks = df["mean_outbreak_real"].values
+    names = df["dataset"].values
+
+    ax.scatter(
+        p_vals,
+        outbreaks,
+        color="#d62728",
+        s=80,
+        edgecolors="black",
+        linewidths=1.2,
+        zorder=5,
+    )
+
+    # Annotate points with dataset names
+    for name, p_val, out_val in zip(names, p_vals, outbreaks):
+        ax.annotate(
+            name,
+            (p_val, out_val),
+            textcoords="offset points",
+            xytext=(6, 5),
+            fontsize=9,
+            fontweight="medium",
+        )
+
+    # Linear trendline if at least 2 datasets
+    if len(p_vals) >= 2:
+        z = np.polyfit(p_vals, outbreaks, 1)
+        p_line = np.linspace(min(p_vals) - 0.03, max(p_vals) + 0.03, 50)
+        ax.plot(
+            p_line,
+            np.polyval(z, p_line),
+            color="#555555",
+            linestyle="--",
+            linewidth=1.5,
+            label=f"Trend (slope: {z[0]:+.2f})",
+        )
+        ax.legend(frameon=True, fontsize=10)
+
+    ax.set_xlabel("Inferred Memory Parameter $p$ ($m=10$)", fontsize=12)
+    ax.set_ylabel("Empirical Mean Final Outbreak Size", fontsize=12)
+    ax.set_title(
+        "Epidemic Outbreak Size vs. Inferred Memory $p$",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.set_ylim(0.0, 1.05)
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_sir_summary_panel(
+    df: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    """3-panel publication-ready figure combining (a) outbreak size, (b) time to peak, and (c) outbreak vs memory.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns: dataset, mean_outbreak_real, std_outbreak_real,
+        mean_outbreak_shuff, std_outbreak_shuff, mean_time_to_peak_real,
+        std_time_to_peak_real, mean_time_to_peak_shuff, std_time_to_peak_shuff,
+        p_memory.
+    output_path : Path
+        Filesystem path where the figure is saved.
+    """
+    datasets = df["dataset"].values
+    n_ds = len(datasets)
+    x = np.arange(n_ds)
+    bar_width = 0.35
+
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5.2), dpi=300)
+
+    # Panel (a): Mean final outbreak size
+    ax1.bar(
+        x - bar_width / 2.0,
+        df["mean_outbreak_real"].values,
+        width=bar_width,
+        yerr=df["std_outbreak_real"].values,
+        capsize=3,
+        color="#1f77b4",
+        edgecolor="#0f4c81",
+        label="Real",
+    )
+    ax1.bar(
+        x + bar_width / 2.0,
+        df["mean_outbreak_shuff"].values,
+        width=bar_width,
+        yerr=df["std_outbreak_shuff"].values,
+        capsize=3,
+        color="#2ca02c",
+        edgecolor="#1b661b",
+        label="Time-Shuffled",
+    )
+    ax1.set_ylabel("Final Outbreak Fraction", fontsize=11)
+    ax1.set_title("(a) Outbreak Size: Real vs. Shuffled", fontsize=12, fontweight="bold")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(datasets, fontsize=9, rotation=25, ha="right")
+    ax1.set_ylim(0.0, 1.05)
+    ax1.grid(True, axis="y", linestyle=":", alpha=0.5)
+    ax1.legend(frameon=True, fontsize=9)
+
+    # Panel (b): Time to peak
+    ax2.bar(
+        x - bar_width / 2.0,
+        df["mean_time_to_peak_real"].values,
+        width=bar_width,
+        yerr=df["std_time_to_peak_real"].values,
+        capsize=3,
+        color="#1f77b4",
+        edgecolor="#0f4c81",
+        label="Real",
+    )
+    ax2.bar(
+        x + bar_width / 2.0,
+        df["mean_time_to_peak_shuff"].values,
+        width=bar_width,
+        yerr=df["std_time_to_peak_shuff"].values,
+        capsize=3,
+        color="#2ca02c",
+        edgecolor="#1b661b",
+        label="Time-Shuffled",
+    )
+    ax2.set_ylabel("Time to Peak (Snapshots)", fontsize=11)
+    ax2.set_title("(b) Time to Peak: Real vs. Shuffled", fontsize=12, fontweight="bold")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(datasets, fontsize=9, rotation=25, ha="right")
+    ax2.grid(True, axis="y", linestyle=":", alpha=0.5)
+    ax2.legend(frameon=True, fontsize=9)
+
+    # Panel (c): Outbreak vs inferred memory p
+    p_vals = df["p_memory"].values
+    outbreaks = df["mean_outbreak_real"].values
+    ax3.scatter(p_vals, outbreaks, color="#d62728", s=65, edgecolors="black", zorder=5)
+    for name, p_val, out_val in zip(datasets, p_vals, outbreaks):
+        ax3.annotate(name, (p_val, out_val), textcoords="offset points", xytext=(5, 4), fontsize=8)
+    if len(p_vals) >= 2:
+        z = np.polyfit(p_vals, outbreaks, 1)
+        p_line = np.linspace(min(p_vals) - 0.03, max(p_vals) + 0.03, 50)
+        ax3.plot(p_line, np.polyval(z, p_line), color="#555555", linestyle="--", linewidth=1.3, label=f"Trend (slope: {z[0]:+.2f})")
+        ax3.legend(frameon=True, fontsize=9)
+    ax3.set_xlabel("Inferred Memory $p$", fontsize=11)
+    ax3.set_ylabel("Mean Outbreak Fraction", fontsize=11)
+    ax3.set_title("(c) Outbreak Size vs. Memory $p$", fontsize=12, fontweight="bold")
+    ax3.grid(True, linestyle=":", alpha=0.5)
+    ax3.set_ylim(0.0, 1.05)
+
+    fig.suptitle("Step 17: SIR Epidemic Spreading Dynamics on Temporal Contact Networks", fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
 
