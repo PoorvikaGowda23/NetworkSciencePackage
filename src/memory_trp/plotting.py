@@ -1305,3 +1305,152 @@ def plot_sir_summary_panel(
     fig.savefig(output_path)
     plt.close(fig)
 
+
+# ---------------------------------------------------------------------------
+# Step 18 — Targeted isolation interventions plots
+# ---------------------------------------------------------------------------
+
+
+def plot_interventions_barchart(
+    df: pd.DataFrame,
+    dataset_name: str,
+    output_path: Path,
+) -> None:
+    """Bar chart comparing mean final outbreak size across intervention strategies for a dataset.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns:
+          - strategy: display label of the strategy
+          - mean_outbreak: mean final outbreak fraction
+          - std_outbreak: standard deviation (or std error) of outbreak fraction
+          - n_removed: number of nodes isolated
+    dataset_name : str
+        Human-readable dataset name.
+    output_path : Path
+        Filesystem path where the figure is saved.
+    """
+    fig, ax = plt.subplots(figsize=(max(6.5, 1.4 * len(df)), 5.2), dpi=300)
+
+    strategies = df["strategy"].values
+    means = df["mean_outbreak"].values
+    stds = df["std_outbreak"].values
+    n_rem = df["n_removed"].values
+
+    x = np.arange(len(df))
+
+    # Distinct palette for intervention strategies
+    palette = ["#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd"]
+    colors = [palette[i % len(palette)] for i in range(len(df))]
+
+    bars = ax.bar(
+        x,
+        means,
+        yerr=stds,
+        capsize=5,
+        color=colors,
+        edgecolor="#333333",
+        linewidth=0.9,
+        error_kw={"elinewidth": 1.5, "ecolor": "#333333"},
+    )
+
+    # Annotate bars with removed node counts and mean percentage
+    for rect, m_val, n_r in zip(bars, means, n_rem):
+        height = rect.get_height()
+        label_text = f"{m_val*100:.1f}%\n(k={n_r})" if n_r > 0 else f"{m_val*100:.1f}%\n(k=0)"
+        ax.text(
+            rect.get_x() + rect.get_width() / 2.0,
+            height + 0.015,
+            label_text,
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+            color="#222222",
+        )
+
+    ax.set_ylabel("Mean Final Outbreak Size (Fraction)", fontsize=12)
+    ax.set_title(
+        f"Targeted Interventions: {dataset_name}",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(strategies, rotation=25, ha="right", fontsize=10)
+
+    y_max = float(np.max(means + stds)) + 0.12
+    ax.set_ylim(0.0, min(1.05, max(y_max, 0.20)))
+    ax.grid(True, axis="y", linestyle=":", alpha=0.6)
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_interventions_grid(
+    dataset_dfs: dict[str, pd.DataFrame],
+    output_path: Path,
+) -> None:
+    """Multi-panel grid comparing intervention strategies across all datasets.
+
+    Parameters
+    ----------
+    dataset_dfs : dict[str, pd.DataFrame]
+        Mapping from dataset display name to DataFrame with columns:
+        strategy, mean_outbreak, std_outbreak, n_removed.
+    output_path : Path
+        Filesystem path where the grid figure is saved.
+    """
+    n_datasets = len(dataset_dfs)
+    if n_datasets == 0:
+        return
+
+    n_cols = 3 if n_datasets >= 3 else n_datasets
+    n_rows = int(np.ceil(n_datasets / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5.8 * n_cols, 4.4 * n_rows), dpi=300)
+    axes_flat = np.array(axes).reshape(-1)
+
+    palette = ["#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd"]
+
+    for idx, (ds_name, df) in enumerate(dataset_dfs.items()):
+        ax = axes_flat[idx]
+        x = np.arange(len(df))
+        means = df["mean_outbreak"].values
+        stds = df["std_outbreak"].values
+        colors = [palette[i % len(palette)] for i in range(len(df))]
+
+        ax.bar(
+            x,
+            means,
+            yerr=stds,
+            capsize=3,
+            color=colors,
+            edgecolor="#333333",
+            linewidth=0.8,
+            error_kw={"elinewidth": 1.2, "ecolor": "#333333"},
+        )
+
+        ax.set_title(ds_name, fontsize=11, fontweight="bold")
+        ax.set_ylabel("Outbreak Size", fontsize=9)
+        ax.set_xticks(x)
+        ax.set_xticklabels(df["strategy"].values, rotation=35, ha="right", fontsize=8)
+        y_max = float(np.max(means + stds)) + 0.10
+        ax.set_ylim(0.0, min(1.05, max(y_max, 0.15)))
+        ax.grid(True, axis="y", linestyle=":", alpha=0.5)
+
+    for j in range(n_datasets, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    fig.suptitle(
+        "Step 18: Targeted Isolation Interventions Across Datasets\n"
+        "(Budget: ~10% of nodes removed from start; error bars indicate +/- 1 SD)",
+        fontsize=13,
+        fontweight="bold",
+    )
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+

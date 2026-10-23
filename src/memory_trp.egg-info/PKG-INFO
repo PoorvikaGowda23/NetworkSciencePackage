@@ -1,0 +1,42 @@
+Metadata-Version: 2.4
+Name: memory-trp
+Version: 0.1.0
+Summary: Modeling memory in time-respecting paths on temporal networks (Guerrini, Cattuto, Dall'Amico, EPJ Data Science 2026)
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.22
+Requires-Dist: scipy>=1.8
+Requires-Dist: pandas>=1.4
+Requires-Dist: matplotlib>=3.5
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: jupyter; extra == "dev"
+Requires-Dist: ipykernel; extra == "dev"
+
+# Modeling Memory in Time-Respecting Paths on Temporal Networks
+
+A Python package and experimental suite implementing memory-augmented temporal network models, Markovian and Non-Markovian time-respecting paths, Block models (SBM), null model benchmarks, diffusion dynamics, time-varying resolution analysis, and non-parametric bootstrap uncertainty estimation.
+
+---
+
+## Time-Shuffled Null Model (`nulls.time_shuffle_graph`)
+
+To test whether memory in time-respecting paths arises from the sequential ordering and temporal continuity of contacts rather than static network structure or snapshot-level heterogeneity, `time_shuffle_graph(graph, rng)` randomly permutes the temporal order of snapshots within each observation window (e.g., day):
+
+$$\{G_1, G_2, \dots, G_T\} \xrightarrow{\pi} \{G_{\pi(1)}, G_{\pi(2)}, \dots, G_{\pi(T)}\}$$
+
+### What the Time-Shuffled Null Destroys
+- **Temporal Ordering and Causal Direction**: Randomizing the chronological order of snapshots eliminates the temporal arrow of time and destroys multi-step causal paths that rely on specific time orderings ($t_1 \le t_2 \le \dots \le t_k$).
+- **Interaction Continuity and Burstiness**: Real-world contacts exhibit bursty temporal dynamics and prolonged duration spanning multiple consecutive snapshots. Time-shuffling disperses consecutive interactions across the timeline, breaking continuous contact episodes into isolated, fragmented events.
+- **Dynamic Correlations and Memory**: Any temporal correlations between past interactions and future contact choices are destroyed, because the temporal history leading up to snapshot $t$ is replaced by an arbitrary collection of unrelated snapshots.
+
+### What the Time-Shuffled Null Preserves
+- **Individual Snapshot Topologies**: Every snapshot $G_t = (V, E_t)$ is left completely intact. Node degrees, local clustering, triangles, snapshot community structures, and instantaneous graph topologies within each time slice are 100% preserved.
+- **Aggregate Static Graph**: Because the collection of snapshots is identical (only permuted in time), the static aggregate adjacency matrix $A_{\text{agg}} = \sum_t A_t$ and the aggregate degree distribution are exactly preserved.
+- **Snapshot Activity Distribution**: The exact set of snapshot edge counts $\{|E_1|, |E_2|, \dots, |E_T|\}$ remains identical, preserving the overall distribution of network activity levels across the recording period.
+
+### Interpretation in Memory Estimation
+Comparing the estimated memory parameter $p$ between the real graph, the time-shuffled null, and the Erdős–Rényi static null reveals the origin of memory:
+- If $p_{\text{real}} \gg p_{\text{time-shuffled}}$, the memory effect is driven by the temporal sequencing, burstiness, and temporal continuity of interactions.
+- If $p_{\text{time-shuffled}} \approx p_{\text{ER}}$, shuffling snapshot order completely wipes out the node-return bias observed along time-respecting paths, confirming that memory cannot be explained by static or snapshot-level topological features alone.

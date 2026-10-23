@@ -99,3 +99,33 @@ def test_bic_function():
     # Empty records gives 0.0
     assert bic(-100.0, 1, 0) == 0.0
 
+
+def test_fit_p_per_group():
+    """Verify that fit_p_per_group fits p per community and filters small groups."""
+    from memory_trp.models import fit_p_per_group, simulate_mem_sbm_records
+    import pandas as pd
+
+    rng = np.random.default_rng(42)
+    n = 60
+    # 3 communities: groups 0 and 1 have 25 nodes, group 2 has only 10 nodes
+    labels = np.array([0] * 25 + [1] * 25 + [2] * 10)
+    C = np.array([
+        [2.0, 0.4, 0.2],
+        [0.4, 2.0, 0.2],
+        [0.2, 0.2, 2.0],
+    ])
+
+    records = simulate_mem_sbm_records(
+        n=n, labels=labels, num_records=800, p=0.35, C=C, rng=rng, mem_size=4
+    )
+
+    # Fit per group with min_records=100 and small B=10 for speed
+    df = fit_p_per_group(records, labels=labels, C=C, n=n, min_records=100, B=10, rng=rng)
+
+    assert isinstance(df, pd.DataFrame)
+    assert set(["group", "n_records", "p_hat", "ci_low", "ci_high"]).issubset(df.columns)
+    for _, row in df.iterrows():
+        assert row["n_records"] >= 100
+        assert 0.0 <= row["p_hat"] <= 1.0
+        assert row["ci_low"] <= row["ci_high"]
+

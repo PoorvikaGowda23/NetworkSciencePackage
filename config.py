@@ -99,3 +99,11 @@ CACHE_DIR_STEP09: Path = RESULTS_DIR / "cache_step09"  # Cache for Step 9 null m
 MIN_GROUP_RECORDS: int = 200   # Skip a community group that has fewer records than this
 STEP16_M: int = 10             # Memory horizon m used in the per-group analysis
 STEP16_NUM_PATHS: int = 1500   # TRPs sampled per observation day in Step 16
+
+# ---------------------------------------------------------------------------
+# Step 18 — targeted isolation interventions
+# ---------------------------------------------------------------------------
+INTERVENTION_BUDGET_PERCENT: float = 10.0  # Budget: percentage k of nodes to isolate (default 10%)
+INTERVENTION_MIN_RECORDS: int = 30         # Minimum records required to compute return rate for a node
+STEP18_M: int = 10                         # Look-back window m for transition records in Step 18
+STEP18_NUM_PATHS: int = 1500               # Sampled TRPs to estimate node-level return rate
