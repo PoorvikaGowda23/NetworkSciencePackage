@@ -181,3 +181,49 @@ def sbm_null_graph(
         labels=labels,
         start_time=graph.start_time,
     )
+
+
+def time_shuffle_graph(
+    graph: TemporalGraph,
+    rng: np.random.Generator,
+) -> TemporalGraph:
+    """Construct a time-shuffled null temporal graph from an empirical graph.
+
+    Randomly permutes the chronological sequence of snapshots within the day
+    while keeping the internal topology of every snapshot completely untouched.
+
+    What it destroys:
+      - Temporal ordering and arrow of time
+      - Continuity and burstiness of interactions across consecutive snapshots
+      - Dynamic causal paths / time-respecting reachability
+
+    What it keeps:
+      - The exact static structure of each individual snapshot (degree sequence,
+        clustering, community structure, number of edges, connected components)
+      - The aggregate static graph (sum of all snapshots)
+      - The activity timeline distribution (number of active edges per time step,
+        merely reshuffled across time)
+
+    Parameters
+    ----------
+    graph : TemporalGraph
+        Empirical temporal graph instance.
+    rng : np.random.Generator
+        Explicit numpy random generator for reproducible permutation.
+
+    Returns
+    -------
+    TemporalGraph
+        New temporal graph with randomly permuted snapshots.
+    """
+    perm = rng.permutation(len(graph.snapshots))
+    shuffled_snaps = [graph.snapshots[i] for i in perm]
+
+    return TemporalGraph(
+        name=f"{graph.name}_time_shuffled",
+        n=graph.n,
+        t_res=graph.t_res,
+        snapshots=shuffled_snaps,
+        labels=graph.labels,
+        start_time=graph.start_time,
+    )

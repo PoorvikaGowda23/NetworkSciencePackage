@@ -694,5 +694,199 @@ def plot_time_varying_grid(
     plt.close(fig)
 
 
+def plot_memory_curves_with_ci(
+    m_values: list[int],
+    p_emp: list[float],
+    ci_emp_low: list[float],
+    ci_emp_high: list[float],
+    p_null: list[float],
+    ci_null_low: list[float],
+    ci_null_high: list[float],
+    dataset_name: str,
+    output_path: Path,
+) -> None:
+    """Plot estimated memory parameter p versus memory horizon m with 95% bootstrap bands."""
+    fig, ax = plt.subplots(figsize=(6.8, 4.8), dpi=300)
+
+    # Empirical curve with confidence band
+    ax.plot(
+        m_values, p_emp,
+        marker="s", color="#1f77b4", linestyle="-", linewidth=2.0, markersize=6,
+        label="MEM (Empirical)",
+    )
+    ax.fill_between(
+        m_values, ci_emp_low, ci_emp_high,
+        color="#1f77b4", alpha=0.2, label="95% Bootstrap CI (Empirical)",
+    )
+
+    # Null curve with confidence band
+    ax.plot(
+        m_values, p_null,
+        marker="s", color="#ff7f0e", linestyle="--", linewidth=1.8, markersize=6,
+        markerfacecolor="none", label="Null MEM (Erdős-Rényi)",
+    )
+    ax.fill_between(
+        m_values, ci_null_low, ci_null_high,
+        color="#ff7f0e", alpha=0.15, label="95% Bootstrap CI (Null)",
+    )
+
+    ax.set_xlabel("Memory length $m$", fontsize=12)
+    ax.set_ylabel("Inferred memory $p$", fontsize=12)
+    ax.set_title(f"Memory Parameter vs Horizon: {dataset_name}", fontsize=13, fontweight="bold")
+    ax.set_xticks(m_values)
+    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.legend(frameon=True, fontsize=10)
+
+    y_max = max(max(ci_emp_high), max(ci_null_high), 0.1) * 1.15
+    ax.set_ylim(-0.02, min(1.0, y_max))
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_memory_grid_with_ci(
+    dataset_curves: dict[str, dict[str, list[float]]],
+    m_values: list[int],
+    output_path: Path,
+) -> None:
+    """Plot p vs m curves with 95% bootstrap bands across all datasets in a multi-panel grid."""
+    n_datasets = len(dataset_curves)
+    if n_datasets == 0:
+        return
+
+    n_cols = 3 if n_datasets >= 3 else n_datasets
+    n_rows = int(np.ceil(n_datasets / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5.5 * n_cols, 4.2 * n_rows), dpi=300)
+    axes_flat = np.array(axes).reshape(-1)
+
+    for idx, (ds_name, curves) in enumerate(dataset_curves.items()):
+        ax = axes_flat[idx]
+        p_emp = curves["p_emp"]
+        ci_emp_low = curves["ci_emp_low"]
+        ci_emp_high = curves["ci_emp_high"]
+        p_null = curves["p_null"]
+        ci_null_low = curves["ci_null_low"]
+        ci_null_high = curves["ci_null_high"]
+
+        ax.plot(m_values, p_emp, marker="s", color="#1f77b4", linestyle="-", linewidth=1.8, markersize=5, label="Empirical")
+        ax.fill_between(m_values, ci_emp_low, ci_emp_high, color="#1f77b4", alpha=0.2)
+
+        ax.plot(m_values, p_null, marker="s", color="#ff7f0e", linestyle="--", linewidth=1.5, markersize=5, markerfacecolor="none", label="ER Null")
+        ax.fill_between(m_values, ci_null_low, ci_null_high, color="#ff7f0e", alpha=0.15)
+
+        ax.set_title(ds_name, fontsize=11, fontweight="bold")
+        ax.set_xlabel("Memory length $m$", fontsize=10)
+        ax.set_ylabel("Inferred $p$", fontsize=10)
+        ax.set_xticks(m_values)
+        ax.grid(True, linestyle=":", alpha=0.6)
+        if idx == 0:
+            ax.legend(frameon=True, fontsize=9)
+
+        y_max = max(max(ci_emp_high), max(ci_null_high), 0.1) * 1.15
+        ax.set_ylim(-0.02, min(1.0, y_max))
+
+    for j in range(n_datasets, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    fig.suptitle(
+        "Memory Parameter $\\hat{p}$ vs. Memory Length $m$ across Datasets\n"
+        "(Shaded bands indicate 95% non-parametric bootstrap confidence intervals)",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_null_comparison_barchart(
+    df_comparison: pd.DataFrame,
+    fixed_m: int,
+    output_path: Path,
+) -> None:
+    """Plot grouped bar chart with bootstrap error bars comparing Real, Time-Shuffled, and ER Null.
+
+    Parameters
+    ----------
+    df_comparison : pd.DataFrame
+        DataFrame with columns:
+          - dataset: display name of dataset
+          - p_real, p_real_low, p_real_high
+          - p_shuffled, p_shuffled_low, p_shuffled_high
+          - p_er, p_er_low, p_er_high
+    fixed_m : int
+        The fixed horizon length m.
+    output_path : Path
+        Filesystem path for saved bar chart figure.
+    """
+    datasets = df_comparison["dataset"].values
+    n_ds = len(datasets)
+    x = np.arange(n_ds)
+    bar_width = 0.26
+
+    fig, ax = plt.subplots(figsize=(10.5, 5.5), dpi=300)
+
+    # 1. Real Graph
+    p_real = df_comparison["p_real"].values
+    err_real = [
+        p_real - df_comparison["p_real_low"].values,
+        df_comparison["p_real_high"].values - p_real,
+    ]
+    ax.bar(
+        x - bar_width, p_real,
+        width=bar_width, yerr=err_real, capsize=4,
+        color="#1f77b4", edgecolor="black", linewidth=0.8,
+        label="Empirical Network",
+    )
+
+    # 2. Time-Shuffled Null
+    p_shuff = df_comparison["p_shuffled"].values
+    err_shuff = [
+        p_shuff - df_comparison["p_shuffled_low"].values,
+        df_comparison["p_shuffled_high"].values - p_shuff,
+    ]
+    ax.bar(
+        x, p_shuff,
+        width=bar_width, yerr=err_shuff, capsize=4,
+        color="#2ca02c", edgecolor="black", linewidth=0.8,
+        label="Time-Shuffled Null (destroys temporal order)",
+    )
+
+    # 3. Erdős-Rényi Null
+    p_er = df_comparison["p_er"].values
+    err_er = [
+        p_er - df_comparison["p_er_low"].values,
+        df_comparison["p_er_high"].values - p_er,
+    ]
+    ax.bar(
+        x + bar_width, p_er,
+        width=bar_width, yerr=err_er, capsize=4,
+        color="#ff7f0e", edgecolor="black", linewidth=0.8,
+        label="Erdős-Rényi Null (destroys network structure)",
+    )
+
+    ax.set_ylabel("Inferred memory parameter $\\hat{p}$", fontsize=12)
+    ax.set_title(
+        f"Impact of Null Models on Memory $\\hat{{p}}$ at $m={fixed_m}$\n"
+        "(Error bars represent 95% bootstrap confidence intervals)",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, fontsize=10, rotation=15, ha="right")
+    ax.set_ylim(0.0, 1.05)
+    ax.grid(True, axis="y", linestyle=":", alpha=0.6)
+    ax.legend(frameon=True, fontsize=10, loc="upper right")
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+
 
 
