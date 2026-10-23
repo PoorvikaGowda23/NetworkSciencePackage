@@ -11,6 +11,10 @@ from pathlib import Path
 # Data resolution
 T_RES_SECONDS: int = 20          # Temporal resolution of contact data (seconds)
 DAY_SPLIT_GAP_SECONDS: int = 14400  # Minimum gap (seconds, 4h) defining day boundaries for daily splitting
+RESOLUTION_T_RES_LIST: list[int] = [20, 60, 300, 600, 900]  # Window durations (seconds) for Step 10
+RESOLUTION_DATASET: str = "primaryschool"                   # Default dataset for Step 10 resolution study
+RESOLUTION_NUM_PATHS: int = 500                             # Paths sampled per day for Step 10
+TAU_MINUTES_LIST: list[float] = [2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 45.0, 60.0]  # Time-based memory horizons (minutes)
 
 # ---------------------------------------------------------------------------
 # Memory measurement
@@ -51,6 +55,15 @@ RANDOM_SEED: int = 42            # Master seed passed to numpy random Generators
 # ---------------------------------------------------------------------------
 DIFFUSION_BETA: float = 0.03    # Transmission probability per contact in SI diffusion
 DIFFUSION_RUNS: int = 15        # Independent diffusion runs used to estimate spreading speed
+
+# Step 13 — diffusion on synthetic memory graphs
+DIFFUSION_ALPHA_GRID: list[float] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+DIFFUSION_D_VALUES: list[float] = [3.0, 6.0, 10.0]   # Three target average-degree values
+DIFFUSION_N_GRAPHS: int = 10    # Synthetic graphs generated per (alpha, d) combination
+DIFFUSION_M_FIT: int = 5        # Memory horizon m used when fitting MEM on synthetic graphs
+DIFFUSION_CLIP_WARN: float = 0.01  # Warn if total clipped probability mass exceeds this threshold
+STEP13_NUM_PATHS: int = 500     # TRPs sampled per graph in Step 13 (smaller than NUM_PATHS to stay fast)
+
 
 # ---------------------------------------------------------------------------
 # Synthetic network generator

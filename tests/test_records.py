@@ -9,7 +9,7 @@ sys.path.insert(0, ".")
 import numpy as np
 import pytest
 
-from memory_trp.records import Records, build_records
+from memory_trp.records import Records, build_records, build_records_time
 
 
 def test_handmade_example():
@@ -88,3 +88,46 @@ def test_records_padding_and_types():
         size = records.mem_size[r]
         assert np.all(records.mem_sets[r, size:] == -1)
         assert np.all(records.mem_sets[r, :size] != -1)
+
+
+def test_build_records_time():
+    """Verify build_records_time correctly enforces the tau look-back window in seconds."""
+    # Nodes: 0 -> 1 -> 2 -> 3 -> 4 -> 2
+    # Snapshot indices: 0, 3, 6, 9, 12, 15. With t_res=20s, physical times are:
+    # 0s, 60s, 120s, 180s, 240s, 300s
+    nodes = [0, 1, 2, 3, 4, 2]
+    times = [0, 3, 6, 9, 12, 15]
+    paths = [(nodes, times)]
+
+    # With tau = 150 seconds (2.5 minutes):
+    # At i=1 (cur=1, t=60s): k in {0..-1} -> empty -> skipped.
+    # At i=2 (cur=2, t=120s): k=0 (t=0s, dt=120 <= 150) -> mem = {0}.
+    # At i=3 (cur=3, t=180s): k=0 (dt=180 > 150, expired), k=1 (t=60s, dt=120 <= 150) -> mem = {1}.
+    # At i=4 (cur=4, t=240s): k=0,1 expired. k=2 (t=120s, dt=120 <= 150) -> mem = {2}. nxt=2 -> in_memory=True.
+    records = build_records_time(paths, tau_seconds=150.0, t_res=20)
+
+    assert len(records) == 3
+    # First record corresponds to cur=2
+    assert records.cur[0] == 2
+    assert records.prev[0] == 1
+    assert records.nxt[0] == 3
+    assert records.mem_size[0] == 1
+    assert set(records.mem_sets[0][:1]) == {0}
+    assert bool(records.in_memory[0]) is False
+
+    # Second record corresponds to cur=3
+    assert records.cur[1] == 3
+    assert records.prev[1] == 2
+    assert records.nxt[1] == 4
+    assert records.mem_size[1] == 1
+    assert set(records.mem_sets[1][:1]) == {1}
+    assert bool(records.in_memory[1]) is False
+
+    # Third record corresponds to cur=4, returning to 2
+    assert records.cur[2] == 4
+    assert records.prev[2] == 3
+    assert records.nxt[2] == 2
+    assert records.mem_size[2] == 1
+    assert set(records.mem_sets[2][:1]) == {2}
+    assert bool(records.in_memory[2]) is True
+

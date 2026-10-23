@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
+from config import T_RES_SECONDS
+
 
 @dataclass
 class Records:
@@ -115,16 +117,17 @@ def build_records(
             if end_idx <= start_idx:
                 continue
 
-            window_nodes = nodes[start_idx:end_idx]
-            # Unique nodes in memory set (ordered by first occurrence)
-            mem_set = list(dict.fromkeys(window_nodes))
-            if len(mem_set) == 0:
-                continue
-
             cur_node = nodes[i]
             prev_node = nodes[i - 1]
             nxt_node = nodes[i + 1]
             t_idx = times[i + 1]
+
+            # Exclude current and previous nodes (M_a = window \ {v_a, v_{a-1}})
+            window_nodes = [n for n in nodes[start_idx:end_idx] if n != cur_node and n != prev_node]
+            # Unique nodes in memory set (ordered by first occurrence)
+            mem_set = list(dict.fromkeys(window_nodes))
+            if len(mem_set) == 0:
+                continue
 
             cur_list.append(cur_node)
             prev_list.append(prev_node)
@@ -166,3 +169,127 @@ def build_records(
 
 # Alias for flexible importing
 extract_records = build_records
+
+
+def build_records_time(
+    paths: list[tuple[list[int], list[int]] | list[int]],
+    tau_seconds: float,
+    t_res: int = T_RES_SECONDS,
+) -> Records:
+    """Build transition records where memory set is nodes visited within the last tau seconds.
+
+    For a path v_1..v_L visited at times t_1..t_L:
+    At transition step i (current node v_i, previous node v_{i-1}, next node v_{i+1}),
+    the memory set consists of all nodes visited at preceding steps k in {0, ..., i-2}
+    such that:
+        t_current - t_k <= tau_seconds
+
+    The current node v_i and the previous node v_{i-1} are excluded from the memory set.
+    If `times` contains snapshot indices (small integers), real time is computed as
+    `t * t_res` seconds. If `times` contains large real timestamps, real time is taken
+    directly.
+
+    Assumption:
+    -----------
+    Early positions whose look-back memory set within tau seconds is empty are skipped.
+    Only transitions with at least one node in memory are included.
+
+    Parameters
+    ----------
+    paths : list[tuple[list[int], list[int]] | list[int]]
+        List of paths, as (nodes, times) tuples or node lists.
+    tau_seconds : float
+        Memory look-back duration in seconds.
+    t_res : int, default=T_RES_SECONDS
+        Aggregation window resolution in seconds (used if times are snapshot indices).
+
+    Returns
+    -------
+    Records
+        Container with numpy arrays of transition records.
+    """
+    if tau_seconds <= 0:
+        raise ValueError(f"tau_seconds must be positive, got {tau_seconds}.")
+
+    cur_list: list[int] = []
+    prev_list: list[int] = []
+    nxt_list: list[int] = []
+    in_mem_list: list[bool] = []
+    mem_size_list: list[int] = []
+    mem_sets_list: list[list[int]] = []
+    time_idx_list: list[int] = []
+
+    for path_item in paths:
+        if isinstance(path_item, tuple):
+            nodes, times = path_item
+        else:
+            nodes = path_item
+            times = list(range(len(nodes)))
+
+        path_len = len(nodes)
+        if path_len < 3:
+            continue
+
+        # If max(times) < 50,000, times represents snapshot indices
+        max_t = max(times) if len(times) > 0 else 0
+        is_snap_idx = (max_t < 50_000)
+
+        for i in range(1, path_len - 1):
+            cur_node = nodes[i]
+            prev_node = nodes[i - 1]
+            nxt_node = nodes[i + 1]
+            t_idx = times[i + 1]
+            t_curr = times[i] * t_res if is_snap_idx else times[i]
+
+            # Collect preceding nodes k in {0, ..., i-2} visited within tau_seconds,
+            # excluding current and previous nodes (M_a = window \ {v_a, v_{a-1}})
+            window_nodes: list[int] = []
+            for k in range(i - 1):  # k = 0 .. i-2
+                if nodes[k] != cur_node and nodes[k] != prev_node:
+                    t_k = times[k] * t_res if is_snap_idx else times[k]
+                    dt = t_curr - t_k
+                    if 0 <= dt <= tau_seconds:
+                        window_nodes.append(nodes[k])
+
+            # Unique nodes in memory set (ordered by first occurrence)
+            mem_set = list(dict.fromkeys(window_nodes))
+            # Assumption: Skip any record whose memory set is empty
+            if len(mem_set) == 0:
+                continue
+
+            cur_list.append(cur_node)
+            prev_list.append(prev_node)
+            nxt_list.append(nxt_node)
+            in_mem_list.append(nxt_node in mem_set)
+            mem_size_list.append(len(mem_set))
+            mem_sets_list.append(mem_set)
+            time_idx_list.append(t_idx)
+
+    n_records = len(cur_list)
+    if n_records == 0:
+        return Records(
+            cur=np.empty(0, dtype=int),
+            prev=np.empty(0, dtype=int),
+            nxt=np.empty(0, dtype=int),
+            in_memory=np.empty(0, dtype=bool),
+            mem_size=np.empty(0, dtype=int),
+            mem_sets=np.empty((0, 0), dtype=int),
+            time_idx=np.empty(0, dtype=int),
+        )
+
+    # Pad memory sets into a 2D array with -1
+    max_mem_len = max(len(s) for s in mem_sets_list)
+    mem_sets_arr = np.full((n_records, max_mem_len), fill_value=-1, dtype=int)
+    for r_idx, s in enumerate(mem_sets_list):
+        mem_sets_arr[r_idx, : len(s)] = s
+
+    return Records(
+        cur=np.array(cur_list, dtype=int),
+        prev=np.array(prev_list, dtype=int),
+        nxt=np.array(nxt_list, dtype=int),
+        in_memory=np.array(in_mem_list, dtype=bool),
+        mem_size=np.array(mem_size_list, dtype=int),
+        mem_sets=mem_sets_arr,
+        time_idx=np.array(time_idx_list, dtype=int),
+    )
+

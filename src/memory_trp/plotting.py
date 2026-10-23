@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 
 def plot_memory_curves(
@@ -158,4 +160,353 @@ def plot_bic_panels(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path)
     plt.close(fig)
+
+
+def plot_resolution_heatmap(
+    matrix: np.ndarray,
+    t_res_list: list[int],
+    m_list: list[int],
+    model_name: str,
+    dataset_name: str,
+    output_path: Path,
+    cmap: str = "Blues",
+) -> None:
+    """Plot a heatmap of estimated memory parameter p across resolutions and horizons.
+
+    Produces a heatmap with numerical values printed in each cell, corresponding
+    to Figure 5 (MEM) or Figure 6 (MEM+SBM) from Guerrini et al. (2026).
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        2D array of shape (len(t_res_list), len(m_list)) with inferred p values.
+    t_res_list : list[int]
+        Temporal resolutions (aggregation windows in seconds) for the rows.
+    m_list : list[int]
+        Memory horizons (steps) for the columns.
+    model_name : str
+        Model identifier ('MEM' or 'MEM+SBM').
+    dataset_name : str
+        Dataset title (e.g. 'Primary School').
+    output_path : Path
+        Filesystem path to save the generated figure.
+    cmap : str, default='Blues'
+        Matplotlib colormap name.
+    """
+    fig, ax = plt.subplots(figsize=(6.5, 5.0), dpi=300)
+    im = ax.imshow(matrix, cmap=cmap, aspect="auto", origin="lower")
+
+    # Set tick labels
+    ax.set_xticks(range(len(m_list)))
+    ax.set_xticklabels(m_list, fontsize=11)
+    ax.set_yticks(range(len(t_res_list)))
+    ax.set_yticklabels(t_res_list, fontsize=11)
+
+    ax.set_xlabel("Memory length $m$", fontsize=12)
+    ax.set_ylabel("Aggregation window $\\Delta t$ (s)", fontsize=12)
+    ax.set_title(f"Inferred Memory $p$ ({model_name}) - {dataset_name}", fontsize=13, fontweight="bold")
+
+    # Annotate numbers in each cell
+    max_val = np.nanmax(matrix) if not np.all(np.isnan(matrix)) else 1.0
+    threshold = max_val / 2.0
+    for r in range(len(t_res_list)):
+        for c in range(len(m_list)):
+            val = matrix[r, c]
+            if np.isnan(val):
+                text_str = "N/A"
+                text_color = "black"
+            else:
+                text_str = f"{val:.3f}"
+                text_color = "white" if val > threshold else "black"
+            ax.text(c, r, text_str, ha="center", va="center", color=text_color, fontsize=11, fontweight="semibold")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Inferred memory $p$", fontsize=11)
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_resolution_heatmaps_side_by_side(
+    p_mem_matrix: np.ndarray,
+    p_sbm_matrix: np.ndarray,
+    t_res_list: list[int],
+    m_list: list[int],
+    dataset_name: str,
+    output_path: Path,
+) -> None:
+    """Plot side-by-side heatmaps of p for MEM (Figure 5) and MEM+SBM (Figure 6).
+
+    Parameters
+    ----------
+    p_mem_matrix : np.ndarray
+        2D array of inferred p for the MEM model across (t_res, m).
+    p_sbm_matrix : np.ndarray
+        2D array of inferred p for the MEM+SBM model across (t_res, m).
+    t_res_list : list[int]
+        Temporal resolutions (aggregation windows in seconds) for the rows.
+    m_list : list[int]
+        Memory horizons (steps) for the columns.
+    dataset_name : str
+        Dataset title.
+    output_path : Path
+        Filesystem path to save the generated figure.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5.0), dpi=300)
+
+    # Use shared color scale for direct visual comparison
+    v_min = min(float(np.nanmin(p_mem_matrix)), float(np.nanmin(p_sbm_matrix)))
+    v_max = max(float(np.nanmax(p_mem_matrix)), float(np.nanmax(p_sbm_matrix)))
+
+    panels = [
+        (axes[0], p_mem_matrix, "MEM (Fig. 5 style)", "Blues"),
+        (axes[1], p_sbm_matrix, "MEM+SBM (Fig. 6 style)", "Reds"),
+    ]
+
+    for ax, mat, title, cmap in panels:
+        im = ax.imshow(mat, cmap=cmap, aspect="auto", origin="lower", vmin=v_min, vmax=v_max)
+        ax.set_xticks(range(len(m_list)))
+        ax.set_xticklabels(m_list, fontsize=11)
+        ax.set_yticks(range(len(t_res_list)))
+        ax.set_yticklabels(t_res_list, fontsize=11)
+        ax.set_xlabel("Memory length $m$", fontsize=11)
+        ax.set_ylabel("Aggregation window $\\Delta t$ (s)", fontsize=11)
+        ax.set_title(title, fontsize=12, fontweight="bold")
+
+        threshold = (v_min + v_max) / 2.0
+        for r in range(len(t_res_list)):
+            for c in range(len(m_list)):
+                val = mat[r, c]
+                if np.isnan(val):
+                    text_str = "N/A"
+                    text_color = "black"
+                else:
+                    text_str = f"{val:.3f}"
+                    text_color = "white" if val > threshold else "black"
+                ax.text(c, r, text_str, ha="center", va="center", color=text_color, fontsize=10, fontweight="semibold")
+
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Inferred memory $p$", fontsize=10)
+
+    fig.suptitle(f"Resolution & Memory Horizon Comparison: {dataset_name}", fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_tau_curves(
+    tau_minutes: list[float],
+    p_mem: list[float],
+    p_sbm: list[float],
+    dataset_name: str,
+    output_path_mem: Path,
+    output_path_sbm: Path,
+    output_path_combined: Path,
+) -> None:
+    """Plot inferred memory parameter p versus time-based memory duration tau in minutes.
+
+    Generates Figure 7 (MEM), Figure 8 (MEM+SBM), and a combined comparison figure.
+
+    Parameters
+    ----------
+    tau_minutes : list[float]
+        Memory look-back horizons in minutes.
+    p_mem : list[float]
+        Inferred p values under MEM.
+    p_sbm : list[float]
+        Inferred p values under MEM+SBM.
+    dataset_name : str
+        Dataset title.
+    output_path_mem : Path
+        Path to save Figure 7 (MEM).
+    output_path_sbm : Path
+        Path to save Figure 8 (MEM+SBM).
+    output_path_combined : Path
+        Path to save combined comparison plot.
+    """
+    # 1. Figure 7: MEM curve
+    fig, ax = plt.subplots(figsize=(6.5, 4.5), dpi=300)
+    ax.plot(
+        tau_minutes,
+        p_mem,
+        marker="o",
+        color="#1f77b4",
+        linestyle="-",
+        linewidth=2.0,
+        markersize=6,
+        label="MEM",
+    )
+    ax.set_xlabel("Memory time duration $\\tau$ (min)", fontsize=12)
+    ax.set_ylabel("Inferred memory $p$", fontsize=12)
+    ax.set_title(f"Time-Based Memory $p(\\tau)$ (MEM) - {dataset_name}", fontsize=13, fontweight="bold")
+    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.set_ylim(-0.02, min(1.0, max(p_mem) * 1.2 if len(p_mem) > 0 and max(p_mem) > 0 else 0.5))
+    ax.legend(frameon=True, fontsize=11)
+    fig.tight_layout()
+    output_path_mem.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path_mem)
+    plt.close(fig)
+
+    # 2. Figure 8: MEM+SBM curve
+    fig, ax = plt.subplots(figsize=(6.5, 4.5), dpi=300)
+    ax.plot(
+        tau_minutes,
+        p_sbm,
+        marker="s",
+        color="#d62728",
+        linestyle="-",
+        linewidth=2.0,
+        markersize=6,
+        label="MEM+SBM",
+    )
+    ax.set_xlabel("Memory time duration $\\tau$ (min)", fontsize=12)
+    ax.set_ylabel("Inferred memory $p$", fontsize=12)
+    ax.set_title(f"Time-Based Memory $p(\\tau)$ (MEM+SBM) - {dataset_name}", fontsize=13, fontweight="bold")
+    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.set_ylim(-0.02, min(1.0, max(p_sbm) * 1.2 if len(p_sbm) > 0 and max(p_sbm) > 0 else 0.5))
+    ax.legend(frameon=True, fontsize=11)
+    fig.tight_layout()
+    output_path_sbm.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path_sbm)
+    plt.close(fig)
+
+    # 3. Combined comparison
+    fig, ax = plt.subplots(figsize=(7.0, 4.8), dpi=300)
+    ax.plot(
+        tau_minutes,
+        p_mem,
+        marker="o",
+        color="#1f77b4",
+        linestyle="-",
+        linewidth=2.0,
+        markersize=6,
+        label="MEM (Fig. 7)",
+    )
+    ax.plot(
+        tau_minutes,
+        p_sbm,
+        marker="s",
+        color="#d62728",
+        linestyle="--",
+        linewidth=2.0,
+        markersize=6,
+        label="MEM+SBM (Fig. 8)",
+    )
+    ax.set_xlabel("Memory time duration $\\tau$ (min)", fontsize=12)
+    ax.set_ylabel("Inferred memory $p$", fontsize=12)
+    ax.set_title(f"Time-Based Memory $p(\\tau)$: {dataset_name}", fontsize=13, fontweight="bold")
+    ax.grid(True, linestyle=":", alpha=0.6)
+    y_max = max(max(p_mem), max(p_sbm), 0.1) * 1.2
+    ax.set_ylim(-0.02, min(1.0, y_max))
+    ax.legend(frameon=True, fontsize=11)
+    fig.tight_layout()
+    output_path_combined.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path_combined)
+    plt.close(fig)
+
+
+def plot_diffusion_figure4(
+    df: pd.DataFrame,
+    output_path: Path,
+    title_suffix: str = "",
+) -> None:
+    """Draw the two-panel Figure 4 analogue (p vs alpha and entropy vs p).
+
+    Left panel:  p_hat versus alpha (median + 5th-95th percentile band).
+    Right panel: final entropy H versus p_hat (scatter + running median).
+    One color per degree value d.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns 'd', 'alpha', 'p_hat', and 'avg_entropy'.
+    output_path : Path
+        Filesystem path for the saved figure.
+    title_suffix : str, default=""
+        Optional subtitle text detailing simulation parameters.
+    """
+    d_values = sorted(df["d"].unique())
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(i) for i in range(len(d_values))]
+
+    fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(13, 5.5), dpi=300)
+
+    # ---- Left panel: p vs alpha ----
+    for d_val, color in zip(d_values, colors):
+        sub = df[df["d"] == d_val]
+        alphas_sorted = sorted(sub["alpha"].unique())
+
+        medians, p5, p95 = [], [], []
+        for alpha in alphas_sorted:
+            vals = sub[sub["alpha"] == alpha]["p_hat"].values
+            medians.append(float(np.median(vals)))
+            p5.append(float(np.percentile(vals, 5)))
+            p95.append(float(np.percentile(vals, 95)))
+
+        ax_left.plot(
+            alphas_sorted, medians,
+            marker="o", markersize=5, linewidth=2.0,
+            color=color, label=f"d = {d_val:.0f}",
+        )
+        ax_left.fill_between(
+            alphas_sorted, p5, p95,
+            color=color, alpha=0.18,
+        )
+
+    ax_left.set_xlabel("Memory mixing parameter $\\alpha$", fontsize=12)
+    ax_left.set_ylabel("Inferred memory $\\hat{p}$", fontsize=12)
+    ax_left.set_title("Memory $\\hat{p}$ vs. $\\alpha$", fontsize=13, fontweight="bold")
+    ax_left.set_xlim(-0.02, 1.02)
+    ax_left.set_ylim(-0.02, 1.02)
+    ax_left.grid(True, linestyle=":", alpha=0.6)
+    ax_left.legend(frameon=True, fontsize=10)
+
+    # ---- Right panel: entropy vs p_hat ----
+    for d_val, color in zip(d_values, colors):
+        sub = df[df["d"] == d_val].sort_values("p_hat")
+
+        ax_right.scatter(
+            sub["p_hat"], sub["avg_entropy"],
+            color=color, alpha=0.35, s=18, edgecolors="none",
+            label=f"d = {d_val:.0f}",
+        )
+
+        p_vals = sub["p_hat"].values
+        h_vals = sub["avg_entropy"].values
+        if len(p_vals) >= 5:
+            bins = np.linspace(p_vals.min(), p_vals.max(), 15)
+            bin_idx = np.digitize(p_vals, bins)
+            bin_medians_p, bin_medians_h = [], []
+            for b in range(1, len(bins)):
+                mask = bin_idx == b
+                if mask.sum() >= 1:
+                    bin_medians_p.append(float(np.median(p_vals[mask])))
+                    bin_medians_h.append(float(np.median(h_vals[mask])))
+            if len(bin_medians_p) >= 2:
+                ax_right.plot(
+                    bin_medians_p, bin_medians_h,
+                    color=color, linewidth=2.2, zorder=5,
+                )
+
+    ax_right.set_xlabel("Inferred memory $\\hat{p}$", fontsize=12)
+    ax_right.set_ylabel("Final entropy $H$", fontsize=12)
+    ax_right.set_title("Diffusion Entropy $H$ vs. Memory $\\hat{p}$", fontsize=13, fontweight="bold")
+    ax_right.set_xlim(-0.02, 1.02)
+    ax_right.set_ylim(-0.02, 1.05)
+    ax_right.grid(True, linestyle=":", alpha=0.6)
+    ax_right.legend(frameon=True, fontsize=10)
+
+    title = "Figure 4 analogue: Memory-driven spreading on synthetic networks"
+    if title_suffix:
+        title += f"\n{title_suffix}"
+    fig.suptitle(title, fontsize=11)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
 

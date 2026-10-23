@@ -1,0 +1,2 @@
+dataset,dataset_key,has_labels,n_nodes,m,t_res_seconds,n_records,p_mem,p_sbm
+Primary School,primaryschool,True,242,10,20,10800,0.5039636162049963,0.4557807186111854
