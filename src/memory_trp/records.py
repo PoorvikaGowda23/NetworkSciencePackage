@@ -51,6 +51,18 @@ class Records:
         """Return the number of transition records."""
         return len(self.cur)
 
+    def __getitem__(self, idx: np.ndarray | slice | list[int]) -> Records:
+        """Slice or mask Records by index array, slice, or boolean mask."""
+        return Records(
+            cur=self.cur[idx],
+            prev=self.prev[idx],
+            nxt=self.nxt[idx],
+            in_memory=self.in_memory[idx],
+            mem_size=self.mem_size[idx],
+            mem_sets=self.mem_sets[idx],
+            time_idx=self.time_idx[idx],
+        )
+
 
 def build_records(
     paths: list[tuple[list[int], list[int]] | list[int]],

@@ -509,4 +509,190 @@ def plot_diffusion_figure4(
     plt.close(fig)
 
 
+def plot_time_varying_p(
+    daily_results: dict[str, dict[float, float]],
+    dataset_name: str,
+    output_path: Path,
+    bin_minutes: int = 60,
+    model: str = "MEM",
+) -> None:
+    """Plot inferred memory p versus clock time for a single dataset.
+
+    Plots one thin line per day, and a thick bold line for the mean across days.
+
+    Parameters
+    ----------
+    daily_results : dict[str, dict[float, float]]
+        Mapping: day_label -> {clock_hour: p_hat}.
+    dataset_name : str
+        Human-readable name of the dataset.
+    output_path : Path
+        Filesystem path for the saved figure.
+    bin_minutes : int, default=60
+        Time bin resolution in minutes (e.g. 60 for hourly, 15 for 15-min).
+    model : str, default="MEM"
+        Model label ("MEM" or "MEM+SBM").
+    """
+    fig, ax = plt.subplots(figsize=(8.0, 5.0), dpi=300)
+
+    # Collect all unique clock hour points across days
+    all_hours: set[float] = set()
+    for day_curve in daily_results.values():
+        all_hours.update(day_curve.keys())
+
+    sorted_hours = sorted(all_hours)
+
+    # 1. Plot individual days as thin lines
+    cmap = plt.get_cmap("Blues")
+    n_days = max(len(daily_results), 1)
+    day_colors = [cmap(0.4 + 0.5 * (i / max(n_days - 1, 1))) for i in range(n_days)]
+
+    for (day_label, day_curve), col in zip(daily_results.items(), day_colors):
+        x = sorted(day_curve.keys())
+        y = [day_curve[h] for h in x]
+        ax.plot(
+            x, y,
+            linestyle="-",
+            linewidth=1.2,
+            alpha=0.6,
+            color=col,
+            label=f"{day_label} (thin)",
+        )
+
+    # 2. Compute mean across days for each clock hour
+    mean_x: list[float] = []
+    mean_y: list[float] = []
+    for h in sorted_hours:
+        vals = [daily_results[d][h] for d in daily_results if h in daily_results[d]]
+        if vals:
+            mean_x.append(h)
+            mean_y.append(float(np.mean(vals)))
+
+    # Plot mean as thick bold line
+    if mean_x:
+        ax.plot(
+            mean_x, mean_y,
+            marker="o",
+            markersize=5,
+            linestyle="-",
+            linewidth=3.0,
+            color="#d62728",
+            zorder=10,
+            label="Mean across days (thick)",
+        )
+
+    bin_label = f"{bin_minutes}-min" if bin_minutes != 60 else "Hourly"
+    ax.set_title(
+        f"Time-Varying Memory $p(t)$ ({model}, {bin_label}): {dataset_name}",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Clock Time (Hour of Day)", fontsize=12)
+    ax.set_ylabel("Inferred memory $p$", fontsize=12)
+    ax.set_ylim(-0.02, 1.02)
+    ax.grid(True, linestyle=":", alpha=0.6)
+
+    # Format x ticks nicely
+    if sorted_hours:
+        min_h = int(np.floor(min(sorted_hours)))
+        max_h = int(np.ceil(max(sorted_hours)))
+        step = 1 if (max_h - min_h) <= 12 else 2
+        tick_hours = list(range(min_h, max_h + 1, step))
+        tick_labels = [f"{h:02d}:00" for h in tick_hours]
+        ax.set_xticks(tick_hours)
+        ax.set_xticklabels(tick_labels)
+
+    ax.legend(frameon=True, fontsize=9, loc="upper right")
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def plot_time_varying_grid(
+    dataset_day_curves: dict[str, dict[str, dict[float, float]]],
+    output_path: Path,
+    bin_minutes: int = 60,
+    model: str = "MEM",
+) -> None:
+    """Plot time-varying memory panels across multiple datasets in a multi-panel grid.
+
+    Parameters
+    ----------
+    dataset_day_curves : dict
+        Mapping: dataset_name -> {day_label: {clock_hour: p}}.
+    output_path : Path
+        Filesystem path for the saved grid figure.
+    bin_minutes : int, default=60
+        Bin width in minutes.
+    model : str, default="MEM"
+        Model label.
+    """
+    n_datasets = len(dataset_day_curves)
+    if n_datasets == 0:
+        return
+
+    n_cols = 3 if n_datasets >= 3 else n_datasets
+    n_rows = int(np.ceil(n_datasets / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5.5 * n_cols, 4.2 * n_rows), dpi=300)
+    axes_flat = np.array(axes).reshape(-1)
+
+    for idx, (ds_name, daily_results) in enumerate(dataset_day_curves.items()):
+        ax = axes_flat[idx]
+        all_hours: set[float] = set()
+        for day_curve in daily_results.values():
+            all_hours.update(day_curve.keys())
+        sorted_hours = sorted(all_hours)
+
+        cmap = plt.get_cmap("Blues")
+        n_days = max(len(daily_results), 1)
+        day_colors = [cmap(0.4 + 0.5 * (i / max(n_days - 1, 1))) for i in range(n_days)]
+
+        for (day_label, day_curve), col in zip(daily_results.items(), day_colors):
+            x = sorted(day_curve.keys())
+            y = [day_curve[h] for h in x]
+            ax.plot(x, y, linestyle="-", linewidth=1.1, alpha=0.5, color=col)
+
+        mean_x, mean_y = [], []
+        for h in sorted_hours:
+            vals = [daily_results[d][h] for d in daily_results if h in daily_results[d]]
+            if vals:
+                mean_x.append(h)
+                mean_y.append(float(np.mean(vals)))
+
+        if mean_x:
+            ax.plot(mean_x, mean_y, marker="o", markersize=4, linestyle="-", linewidth=2.5, color="#d62728", zorder=10)
+
+        ax.set_title(ds_name, fontsize=12, fontweight="bold")
+        ax.set_xlabel("Clock Time", fontsize=10)
+        ax.set_ylabel("Inferred $p$", fontsize=10)
+        ax.set_ylim(-0.02, 1.02)
+        ax.grid(True, linestyle=":", alpha=0.6)
+
+        if sorted_hours:
+            min_h = int(np.floor(min(sorted_hours)))
+            max_h = int(np.ceil(max(sorted_hours)))
+            step = 2 if (max_h - min_h) > 8 else 1
+            tick_hours = list(range(min_h, max_h + 1, step))
+            ax.set_xticks(tick_hours)
+            ax.set_xticklabels([f"{h:02d}:00" for h in tick_hours], fontsize=8)
+
+    # Hide extra subplots
+    for j in range(n_datasets, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    bin_label = f"{bin_minutes}-min" if bin_minutes != 60 else "Hourly"
+    fig.suptitle(
+        f"Time-Varying Memory $p(t)$ across Datasets ({model}, {bin_label})\n"
+        "Thin blue lines = individual days; thick red line = across-day mean",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+
 
