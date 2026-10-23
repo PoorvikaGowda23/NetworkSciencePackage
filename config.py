@@ -38,6 +38,8 @@ MAX_TRP_RETRIES_PER_PATH: int = 1000  # Max retry attempts allowed to generate e
 # Null models
 # ---------------------------------------------------------------------------
 N_NULL_REALIZATIONS: int = 50   # Number of null-model reshufflings to generate
+QUICK_NULL_REALIZATIONS: int = 3  # Fast test run: null realizations
+QUICK_NUM_PATHS: int = 300        # Fast test run: sampled paths per day
 
 # ---------------------------------------------------------------------------
 # Reproducibility
@@ -73,3 +75,4 @@ N_SIR_RUNS: int = 200           # Number of independent SIR simulation runs
 _BASE_DIR: Path = Path(__file__).parent
 DATA_DIR: Path = _BASE_DIR / "data"       # Raw and processed contact-sequence datasets
 RESULTS_DIR: Path = _BASE_DIR / "results" # Output figures, tables, and serialised results
+CACHE_DIR_STEP09: Path = RESULTS_DIR / "cache_step09"  # Cache for Step 9 null model paths and fits

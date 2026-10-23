@@ -1,0 +1,5 @@
+dataset,dataset_key,is_labeled,n_nodes,k_communities,m,p_emp_mem,p_emp_sbm,p_null_mean,p_null_std,n_realizations,num_paths_day
+Malawi,malawi,False,86,0,5,0.9075652564931095,,1.272164775157343e-06,1.7263416275013448e-06,3,300
+Malawi,malawi,False,86,0,10,0.9341868107611175,,5.145690370652111e-08,0.0,3,300
+Malawi,malawi,False,86,0,15,0.9410501948571368,,5.145690370652111e-08,0.0,3,300
+Malawi,malawi,False,86,0,20,0.9426331165968467,,5.145690370652111e-08,0.0,3,300
