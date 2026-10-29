@@ -58,7 +58,7 @@ DIFFUSION_RUNS: int = 15        # Independent diffusion runs used to estimate sp
 
 # Step 13 — diffusion on synthetic memory graphs
 DIFFUSION_ALPHA_GRID: list[float] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-DIFFUSION_D_VALUES: list[float] = [3.0, 6.0, 10.0]   # Three target average-degree values
+DIFFUSION_D_VALUES: list[float] = [0.08, 0.2, 0.4]   # Three target average-degree values
 DIFFUSION_N_GRAPHS: int = 10    # Synthetic graphs generated per (alpha, d) combination
 DIFFUSION_M_FIT: int = 5        # Memory horizon m used when fitting MEM on synthetic graphs
 DIFFUSION_CLIP_WARN: float = 0.01  # Warn if total clipped probability mass exceeds this threshold
@@ -107,3 +107,11 @@ INTERVENTION_BUDGET_PERCENT: float = 10.0  # Budget: percentage k of nodes to is
 INTERVENTION_MIN_RECORDS: int = 30         # Minimum records required to compute return rate for a node
 STEP18_M: int = 10                         # Look-back window m for transition records in Step 18
 STEP18_NUM_PATHS: int = 1500               # Sampled TRPs to estimate node-level return rate
+
+# ---------------------------------------------------------------------------
+# Step 20 — SIS / SIRS epidemic models and their interventions
+# ---------------------------------------------------------------------------
+SIRS_IMMUNITY_SNAPSHOTS: int = 180   # SIRS: immunity duration in snapshots (180 * 20 s = 1 h)
+STEP20_MODELS: list[str] = ["sir", "sis", "sirs"]  # Models compared in Step 20
+ 
+ 
